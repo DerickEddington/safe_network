@@ -134,6 +134,20 @@ impl Client {
         debug!("Writing to register at {:?}", address);
         let mut register = self.get_register(address).await?;
 
+        self.write_to_register_without_read(&mut register, entry, children)
+    }
+
+    /// Like [`write_to_register`](Self::write_to_register) but takes the `Register` instead of
+    /// getting it by address.
+    ///
+    /// This enables giving a `Register` that has a different state than what would be gotten from
+    /// the Network, and this enables not requiring read permission for write-only use.
+    pub fn write_to_register_without_read(
+        &self,
+        register: &mut Register,
+        entry: Entry,
+        children: BTreeSet<EntryHash>,
+    ) -> Result<(EntryHash, RegisterWriteAheadLog), Error> {
         // Let's check the policy/permissions to make sure this operation is allowed,
         // otherwise it will fail when the operation is applied on the network replica.
         let public_key = self.keypair.public_key();
@@ -141,6 +155,7 @@ impl Client {
 
         // We can now write the entry to the Register
         let (hash, op) = register.write(entry, children)?;
+        let address = *register.address();
         let op = EditRegister { address, edit: op };
 
         let signature = self.keypair.sign(&bincode::serialize(&op)?);
